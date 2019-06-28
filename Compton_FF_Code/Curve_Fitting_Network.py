@@ -270,13 +270,18 @@ class CurveFittingNetwork(object):
         mnist_loader.load_data_wrapper.
 
         """
-        if convert:
-            results = [(np.argmax(self.feedforward(x)), np.argmax(y))
-                       for (x, y) in data]
-        else:
-            results = [(np.argmax(self.feedforward(x)), y)
-                        for (x, y) in data]
-        return sum(int(x == y) for (x, y) in results)
+
+
+        results = [(self.feedforward(x), y) for (x, y) in data]
+        mse_sum = 0.0
+        count = 0.0
+        for (y_out, y_true) in results:
+            count+=1
+            tmp = sum((y_out-y_true)*(y_out-y_true))
+            mse_sum+= float(tmp[0])
+        print(type(mse_sum), ' ', type(count))
+        out=(mse_sum / count)*1.0
+        return out
 
     def total_cost(self, data, lmbda, convert=False):
         """Return the total cost for the data set ``data``.  The flag
@@ -288,7 +293,6 @@ class CurveFittingNetwork(object):
         cost = 0.0
         for x, y in data:
             a = self.feedforward(x)
-            if convert: y = vectorized_result(y)
             cost += self.cost.fn(a, y)/len(data)
         cost += 0.5*(lmbda/len(data))*sum(
             np.linalg.norm(w)**2 for w in self.weights)
@@ -320,13 +324,13 @@ def load(filename):
     return net
 
 #### Miscellaneous functions
-def vectorized_result(j):
+def vectorized_result(j, num):
     """Return a 10-dimensional unit vector with a 1.0 in the j'th position
     and zeroes elsewhere.  This is used to convert a digit (0...9)
     into a corresponding desired output from the neural network.
 
     """
-    e = np.zeros((10, 1))
+    e = np.zeros((num, 1))
     e[j] = 1.0
     return e
 
