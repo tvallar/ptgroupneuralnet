@@ -82,10 +82,18 @@ print('RMSE: ', rmse(y, output))
 #-------------------------------------------------------------------------_#
 #           Model               #
 
+
+## Model Parameters
 num_inputs = 3
 num_outputs = 3
+learning_rate = 0.005
+regularization_rate = 0.0001
+iterations = 100
+batch_size = 30
 
-model_deep_network = CFN.CurveFittingNetwork([num_inputs, 30, num_outputs])
+layers = [num_inputs, 30, num_outputs]
+
+model_deep_network = CFN.CurveFittingNetwork(layers)
 
 #model_gradient_boosting=GradientBoostingRegressor(loss='ls', learning_rate=0.1, n_estimators=100, subsample=1.0, criterion='friedman_mse', min_samples_split=2, 
 #    min_samples_leaf=1, min_weight_fraction_leaf=0.0, max_depth=3, min_impurity_decrease=0.0, min_impurity_split=None, init=None, random_state=42, 
@@ -118,7 +126,7 @@ for i in range(len(X_test)):
     test_eval_data.append((np.reshape(X_test[i],(num_inputs,1)), np.reshape(y_test[i],(num_outputs,1))))
 
 
-model_deep_network.SGD(training_data, 100, 30, 0.005, 0.0001, evaluation_data=test_eval_data,
+model_deep_network.SGD(training_data, iterations, batch_size, learning_rate, regularization_rate, evaluation_data=test_eval_data,
                          monitor_evaluation_accuracy=True, monitor_evaluation_cost=True)
 
 predicted_dnn =[]
