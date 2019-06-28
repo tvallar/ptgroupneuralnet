@@ -1,0 +1,39 @@
+=============G12.FFREAD======================
+CUTS   5.e-3 5.e-3 5.e-3 5.e-3 5.e-3
+DCCUTS 1.e-4 1.e-4 1.e-4 1.e-4 1.e-4
+ECCUTS 1.e-4 1.e-4 1.e-4 1.e-4 1.e-4
+SCCUTS 1.e-4 1.e-4 1.e-4 1.e-4 1.e-4
+
+MAGTYPE 2
+MAGSCALE 0.500 0.000
+PTGIFIELD 0
+
+STTYPE 1
+STZOFF -90.0
+TGPOS 0. 0. 0.
+
+TARGET 'g11a'
+TGMATE 'PROT'
+
+
+POSBEAM 0.0 0.0
+
+GEOM 'ALL' 'ST'
+NOGEOM 'MINI' 'PTG '
+
+BEAM 5.714
+DCAY 1
+
+KINE 1
+MULS 1
+
+AUTO 1
+
+RUNG 56855
+
+TIME 1000000 1000000 1000000
+
+TRIG 1000000
+
+STOP
+============================================

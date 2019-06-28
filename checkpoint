@@ -1,0 +1,2 @@
+model_checkpoint_path: "bench_dnn_model.ckpt"
+all_model_checkpoint_paths: "bench_dnn_model.ckpt"

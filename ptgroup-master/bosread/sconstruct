@@ -1,0 +1,10 @@
+from build_system import environment
+
+analyzerEnvironment = environment.env(deps=['clas6','root'])
+analyzerEnvironment.load_dependency({'clas6':['clasEvent_libs', 'default_libs']})
+analyzerEnvironment.load_dependency('root')
+
+sourceString = 'bosread.cc'
+targetString = sourceString.split('.')[0]
+
+analyzerEnvironment.program(target=targetString,source=sourceString)

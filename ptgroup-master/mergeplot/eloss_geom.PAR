@@ -1,0 +1,4 @@
+	real target_offset(3), st_offset
+	common/eloss_geom/ target_offset, st_offset
+
+
