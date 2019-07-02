@@ -84,14 +84,14 @@ print('RMSE: ', rmse(y, output))
 
 
 ## Model Parameters
-num_inputs = 3
+num_inputs = 6
 num_outputs = 3
-learning_rate = 0.005
+learning_rate = 0.0008
 regularization_rate = 0.0001
-iterations = 100
+iterations = 2000
 batch_size = 30
 
-layers = [num_inputs, 30, num_outputs]
+layers = [num_inputs, 100, num_outputs]
 
 model_deep_network = CFN.CurveFittingNetwork(layers)
 
@@ -100,12 +100,16 @@ model_deep_network = CFN.CurveFittingNetwork(layers)
 #    max_features=None, alpha=0.9, verbose=0, max_leaf_nodes=None, warm_start=False, presort='auto', validation_fraction=0.1, n_iter_no_change=None, tol=0.0001)
 
 
-normalizer = 0.002
-y_data = np.zeros((len(x_b), 3)) + [p0/normalizer, p1/normalizer, p2/normalizer]
+normalizer = 0.2
+#y_data = F
+#np.zeros((len(x_b), 1)) + [p0/normalizer, p1/normalizer, p2/normalizer]
 X_data = []
+y_data = []
 for i in range(len(x_b)):
-    X_data.append([x_b[i], t[i], Q[i]])
+    X_data.append([x_b[i], t[i], Q[i], X[i], np.cos(X[i]), np.cos(X[i]*X[i])])
+    y_data.append([calculate_observable((X[i],x_b[i], t[i], Q[i]), p0, p1, p2)])
 X_data = np.array(X_data)
+y_data = np.array(y_data)
 
 X_train = X_data[:train_num]
 y_train = y_data[:train_num]
@@ -119,20 +123,23 @@ print(np.shape(X_train))
 
 training_data = []
 for i in range(len(X_train)):
-    training_data.append((np.reshape(X_train[i],(num_inputs,1)), np.reshape(y_train[i],(num_outputs,1))))
+    training_data.append((np.reshape(X_train[i],(num_inputs,1)), np.reshape(y_train[i],(1))))
 
 test_eval_data = []
 for i in range(len(X_test)):
-    test_eval_data.append((np.reshape(X_test[i],(num_inputs,1)), np.reshape(y_test[i],(num_outputs,1))))
+    test_eval_data.append((np.reshape(X_test[i],(num_inputs,1)), np.reshape(y_test[i],(1))))
 
 
-model_deep_network.SGD(training_data, iterations, batch_size, learning_rate, regularization_rate, evaluation_data=test_eval_data,
+eval_cost, eval_acc, train_cost, train_acc = model_deep_network.SGD(training_data, iterations, batch_size, learning_rate, 
+                        lmbda=regularization_rate, scaling_value=0.0001, evaluation_data=test_eval_data,
                          monitor_evaluation_accuracy=True, monitor_evaluation_cost=True)
 
 predicted_dnn =[]
 actual_dnn = []
-for (x,y) in test_eval_data: 
-    predicted_dnn.append(model_deep_network.feedforward(x))
+for (x,y) in test_eval_data:
+    out = model_deep_network.feedforward(x)
+    h_tmp = (x[3], x[0], x[1], x[2])
+    predicted_dnn.append(calculate_observable(h, out[0]*normalizer, out[1]*normalizer, out[2]*normalizer))
     actual_dnn.append(y)
 predicted_dnn=np.array(predicted_dnn)
 actual_dnn=np.array(actual_dnn)
@@ -154,7 +161,10 @@ def get_graph_arrays(line_value, x_axis, model):
 
     model_curve1 = []
     for i in range(len(x_axis)):
-        params_tmp = model.feedforward(np.array([[x_b1[i]], [t_1[i]], [Q_1[i]]]))*normalizer
+        params_tmp = model.feedforward(np.array([[x_b1[i]], [t_1[i]], [Q_1[i]], [x_axis[i]], [np.cos(x_axis[i])], [np.cos(x_axis[i]*x_axis[i])]]))
+        #print(x_axis[i], ' ', x_b1[i], ' ', t_1[i], ' ', Q_1[i])
+        #print(params_tmp)
+        #print(p0,' ', p1, ' ', p2)
         data1_tmp = (x_axis[i],x_b1[i], t_1[i], Q_1[i])
         model_curve1.append(calculate_observable(data1_tmp, params_tmp[0][0], params_tmp[1][0], params_tmp[2][0]))
 
@@ -191,7 +201,7 @@ plt.legend()
 plt.show()
 
 plt.errorbar(X[line2*7:(line2+1)*7], F[line2*7:(line2+1)*7], errF[line2*7:(line2+1)*7], None,  'go', label='t={0} x_b={1} Q={2}'.format(t[line2*7],x_b[line2*7], Q[line2*7])) # plot the raw data
-plt.plot(x_axis, calculate_observable(data2, p0, p1, p2), 'g--', alpha=0.5, label='Curve fit 2') # plot the raw data
+plt.plot(x_axis, true_curve2, 'g--', alpha=0.5, label='Curve fit 2') # plot the raw data
 plt.plot(x_axis, dnn_curve2, 'g-', label='Model fit') # plot the raw data
 
 plt.xlabel('X value')
@@ -201,7 +211,7 @@ plt.legend()
 plt.show()
 
 plt.errorbar(X[line3*7:(line3+1)*7], F[line3*7:(line3+1)*7], errF[line3*7:(line3+1)*7], None,  'ro', label='t={0} x_b={1} Q={2}'.format(t[line3*7],x_b[line3*7], Q[line3*7])) # plot the raw data
-plt.plot(x_axis, calculate_observable(data3, p0, p1, p2), 'r--', alpha=0.5, label='Curve fit 3') # plot the raw data
+plt.plot(x_axis, true_curve3, 'r--', alpha=0.5, label='Curve fit 3') # plot the raw data
 plt.plot(x_axis, dnn_curve3, 'r-', label='Model fit') # plot the raw data
 
 plt.xlabel('X value')

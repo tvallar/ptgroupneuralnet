@@ -70,11 +70,23 @@ def calculate_observable(data, par0, par1, par2):
     #+ par[1]*cos(x[0]) + par[2]*cos(x[0]*x[0]));
     return -1/(x_b*x_b*t*(1+2*x_b*M_p*2*x_b*M_p/(Q*Q))*(1+2*x_b*M_p*2*x_b*M_p/(Q*Q)))*(par0 + par1*np.cos(x) + par2*np.cos(x*x))
 
+def calculate_observable_delta(data, par_num):
+    x, x_b, t, Q = data
+    M_p = 0.938 #GeV
+    if par_num == 0:
+        return -1/(x_b*x_b*t*(1+2*x_b*M_p*2*x_b*M_p/(Q*Q))*(1+2*x_b*M_p*2*x_b*M_p/(Q*Q)))
+    elif par_num ==1:
+        return -1/(x_b*x_b*t*(1+2*x_b*M_p*2*x_b*M_p/(Q*Q))*(1+2*x_b*M_p*2*x_b*M_p/(Q*Q)))*np.cos(x)
+    elif par_num==2:
+        return -1/(x_b*x_b*t*(1+2*x_b*M_p*2*x_b*M_p/(Q*Q))*(1+2*x_b*M_p*2*x_b*M_p/(Q*Q)))*(np.cos(x*x))
+    else:
+        return 0.0
+
 
 #### Main Network class
 class CurveFittingNetwork(object):
 
-    def __init__(self, sizes, cost=CrossEntropyCost, Function=calculate_observable):
+    def __init__(self, sizes, cost=CrossEntropyCost, activation='sigmoid', Function=calculate_observable):
         """The list ``sizes`` contains the number of neurons in the respective
         layers of the network.  For example, if the list was [2, 3, 1]
         then it would be a three-layer network, with the first layer
@@ -135,6 +147,7 @@ class CurveFittingNetwork(object):
 
     def SGD(self, training_data, epochs, mini_batch_size, eta,
             lmbda = 0.0,
+            scaling_value=0.1,
             evaluation_data=None,
             monitor_evaluation_cost=False,
             monitor_evaluation_accuracy=False,
@@ -170,31 +183,32 @@ class CurveFittingNetwork(object):
                 for k in range(0, n, mini_batch_size)]
             for mini_batch in mini_batches:
                 self.update_mini_batch(
-                    mini_batch, eta, lmbda, len(training_data))
-            print("Epoch %s training complete" % j)
-            if monitor_training_cost:
-                cost = self.total_cost(training_data, lmbda)
-                training_cost.append(cost)
-                print ("Cost on training data: {}".format(cost))
-            if monitor_training_accuracy:
-                accuracy = self.accuracy(training_data, convert=True)
-                training_accuracy.append(accuracy)
-                print("Accuracy on training data: {} / {}".format(
-                    accuracy, n))
-            if monitor_evaluation_cost:
-                cost = self.total_cost(evaluation_data, lmbda, convert=True)
-                evaluation_cost.append(cost)
-                print("Cost on evaluation data: {}".format(cost))
-            if monitor_evaluation_accuracy:
-                accuracy = self.accuracy(evaluation_data)
-                evaluation_accuracy.append(accuracy)
-                print("Accuracy on evaluation data: {} / {}".format(
-                    self.accuracy(evaluation_data), n_data))
-            print()
+                    mini_batch, eta, lmbda, len(training_data), scaling_value)
+            if j%10==0:
+                print("Epoch %s training complete" % j)
+                if monitor_training_cost:
+                    cost = self.total_cost(training_data, lmbda)
+                    training_cost.append(cost)
+                    print ("Cost on training data: {}".format(cost))
+                if monitor_training_accuracy:
+                    accuracy = self.accuracy(training_data, convert=True)
+                    training_accuracy.append(accuracy)
+                    print("Accuracy on training data: {} / {}".format(
+                        accuracy, n))
+                if monitor_evaluation_cost:
+                    cost = self.total_cost(evaluation_data, lmbda, convert=True)
+                    evaluation_cost.append(cost)
+                    print("Cost on evaluation data: {}".format(cost))
+                if monitor_evaluation_accuracy:
+                    accuracy = self.accuracy(evaluation_data)
+                    evaluation_accuracy.append(accuracy)
+                    print("Accuracy on evaluation data: {} / {}".format(
+                        self.accuracy(evaluation_data), n_data))
+                print()
         return evaluation_cost, evaluation_accuracy, \
             training_cost, training_accuracy
 
-    def update_mini_batch(self, mini_batch, eta, lmbda, n):
+    def update_mini_batch(self, mini_batch, eta, lmbda, n, scaling_value):
         """Update the network's weights and biases by applying gradient
         descent using backpropagation to a single mini batch.  The
         ``mini_batch`` is a list of tuples ``(x, y)``, ``eta`` is the
@@ -205,7 +219,7 @@ class CurveFittingNetwork(object):
         nabla_b = [np.zeros(b.shape) for b in self.biases]
         nabla_w = [np.zeros(w.shape) for w in self.weights]
         for x, y in mini_batch:
-            delta_nabla_b, delta_nabla_w = self.backprop(x, y)
+            delta_nabla_b, delta_nabla_w = self.backprop(x, y, scaling_value)
             nabla_b = [nb+dnb for nb, dnb in zip(nabla_b, delta_nabla_b)]
             nabla_w = [nw+dnw for nw, dnw in zip(nabla_w, delta_nabla_w)]
         self.weights = [(1-eta*(lmbda/n))*w-(eta/len(mini_batch))*nw
@@ -213,7 +227,7 @@ class CurveFittingNetwork(object):
         self.biases = [b-(eta/len(mini_batch))*nb
                        for b, nb in zip(self.biases, nabla_b)]
 
-    def backprop(self, x, y):
+    def backprop(self, x, y, scaling_value):
         """Return a tuple ``(nabla_b, nabla_w)`` representing the
         gradient for the cost function C_x.  ``nabla_b`` and
         ``nabla_w`` are layer-by-layer lists of numpy arrays, similar
@@ -230,9 +244,28 @@ class CurveFittingNetwork(object):
             activation = sigmoid(z)
             activations.append(activation)
         # backward pass
-        delta = (self.cost).delta(zs[-1], activations[-1], y)
+        
+        # This is where the deltas for the output node is being found
+        ## -------------------------------------- ###
+        h = (x[3], x[0], x[1], x[2])
+        param_deltas = np.array([calculate_observable_delta(h, 0), calculate_observable_delta(h, 1), calculate_observable_delta(h, 2)])
+        #print(param_deltas)
+        #print('-1-1')
+        
+        #print(zs[-1], ' ', activations[-1], ' ', y)
+        estimated_val = calculate_observable(h, activations[-1][0], activations[-1][1], activations[-1][2])
+        #print(estimated_val)
+        #print(y)
+        delta = (estimated_val-y)*param_deltas*scaling_value
+        #delta = (self.cost).delta(zs[-1], activations[-1], y)
+        #print(delta)
+        #print(delta2)
+        #print('---')
         nabla_b[-1] = delta
         nabla_w[-1] = np.dot(delta, activations[-2].transpose())
+        #-----------------------------------------##
+
+    
         # Note that the variable l in the loop below is used a little
         # differently to the notation in Chapter 2 of the book.  Here,
         # l = 1 means the last layer of neurons, l = 2 is the
@@ -274,12 +307,13 @@ class CurveFittingNetwork(object):
 
         results = [(self.feedforward(x), y) for (x, y) in data]
         mse_sum = 0.0
-        count = 0.0
+        count = 0
         for (y_out, y_true) in results:
             count+=1
             tmp = sum((y_out-y_true)*(y_out-y_true))
             mse_sum+= float(tmp[0])
-        print(type(mse_sum), ' ', type(count))
+            #print(mse_sum)
+        #print(type(mse_sum), ' ', type(count))
         out=(mse_sum / count)*1.0
         return out
 
@@ -342,18 +376,15 @@ def sigmoid_prime(z):
     """Derivative of the sigmoid function."""
     return sigmoid(z)*(1-sigmoid(z))
 
-
-def deriv_sigmoid(x):
-    # Derivative of sigmoid: f'(x) = f(x) * (1 - f(x))
-    fx = sigmoid(x)
-    return fx * (1 - fx)
-
 def mse_loss(y_true, y_pred):
   # y_true and y_pred are numpy arrays of the same length.
     return ((y_true - y_pred) ** 2).mean()
 
 def tanh(val):
     return (np.exp(val)-np.exp(-1*val))/(np.exp(val)+np.exp(-1*val))
+
+def tanh_prime(z):
+    return 1-(tanh(z)**2)
 
 def ReLU(val):
     return np.max([0,val])
