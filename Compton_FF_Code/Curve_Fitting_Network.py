@@ -82,11 +82,20 @@ def calculate_observable_delta(data, par_num):
     else:
         return 0.0
 
+def curve_length(xb, t, q, par0, par1, par2):
+    x_axis = np.linspace(0, 6, num=20)
+    total=0.0
+    for i in range(1,len(x_axis)):
+        point1 = calculate_observable((x_axis[i-1], xb, t, q), par0, par1, par2)
+        point2 = calculate_observable((x_axis[i], xb, t, q), par0, par1, par2)
+
+        total+= np.sqrt((x_axis[i]-x_axis[i-1])*(x_axis[i]-x_axis[i-1])+(point2-point1)*(point2-point1))
+    return total
 
 #### Main Network class
 class CurveFittingNetwork(object):
 
-    def __init__(self, sizes, cost=CrossEntropyCost, activation='sigmoid', Function=calculate_observable):
+    def __init__(self, sizes, cost=QuadraticCost, activation='sigmoid', Function=calculate_observable, parameter_scaling=1.0):
         """The list ``sizes`` contains the number of neurons in the respective
         layers of the network.  For example, if the list was [2, 3, 1]
         then it would be a three-layer network, with the first layer
@@ -98,11 +107,12 @@ class CurveFittingNetwork(object):
 
         """
         self.num_layers = len(sizes)
+        self.parameter_scale = parameter_scaling
         self.sizes = sizes
-        self.default_weight_initializer()
+        self.default_weight_initializer(parameter_scaling)
         self.cost=cost
 
-    def default_weight_initializer(self):
+    def default_weight_initializer(self, parameter_scaling):
         """Initialize each weight using a Gaussian distribution with mean 0
         and standard deviation 1 over the square root of the number of
         weights connecting to the same neuron.  Initialize the biases
@@ -115,8 +125,8 @@ class CurveFittingNetwork(object):
         layers.
 
         """
-        self.biases = [np.random.randn(y, 1) for y in self.sizes[1:]]
-        self.weights = [np.random.randn(y, x)/np.sqrt(x)
+        self.biases = [(np.random.randn(y, 1)*self.parameter_scale) for y in self.sizes[1:]]
+        self.weights = [(np.random.randn(y, x)*self.parameter_scale)/np.sqrt(x)
                         for x, y in zip(self.sizes[:-1], self.sizes[1:])]
 
     def large_weight_initializer(self):
@@ -148,6 +158,7 @@ class CurveFittingNetwork(object):
     def SGD(self, training_data, epochs, mini_batch_size, eta,
             lmbda = 0.0,
             scaling_value=0.1,
+            shrinking_learn_rate=False,
             evaluation_data=None,
             monitor_evaluation_cost=False,
             monitor_evaluation_accuracy=False,
@@ -172,6 +183,7 @@ class CurveFittingNetwork(object):
         are empty if the corresponding flag is not set.
 
         """
+        self.mini_batch_size = mini_batch_size
         if evaluation_data: n_data = len(evaluation_data)
         n = len(training_data)
         evaluation_cost, evaluation_accuracy = [], []
@@ -182,8 +194,12 @@ class CurveFittingNetwork(object):
                 training_data[k:k+mini_batch_size]
                 for k in range(0, n, mini_batch_size)]
             for mini_batch in mini_batches:
-                self.update_mini_batch(
-                    mini_batch, eta, lmbda, len(training_data), scaling_value)
+                if shrinking_learn_rate:
+                    self.update_mini_batch(
+                        mini_batch, eta, lmbda, len(training_data), scaling_value)
+                else:
+                    self.update_mini_batch(
+                        mini_batch, eta, lmbda, len(training_data), scaling_value)
             if j%10==0:
                 print("Epoch %s training complete" % j)
                 if monitor_training_cost:
@@ -218,11 +234,19 @@ class CurveFittingNetwork(object):
         """
         nabla_b = [np.zeros(b.shape) for b in self.biases]
         nabla_w = [np.zeros(w.shape) for w in self.weights]
+        curve_len = 0.0
+        #mini_batch_size = len(mini_batch)
         for x, y in mini_batch:
             delta_nabla_b, delta_nabla_w = self.backprop(x, y, scaling_value)
             nabla_b = [nb+dnb for nb, dnb in zip(nabla_b, delta_nabla_b)]
             nabla_w = [nw+dnw for nw, dnw in zip(nabla_w, delta_nabla_w)]
-        self.weights = [(1-eta*(lmbda/n))*w-(eta/len(mini_batch))*nw
+            out = self.feedforward(x)
+            #print(out)
+            curve_len+=curve_length(x[0], x[1], x[2], out[0], out[1], out[2])
+            #print(curve_len)
+        #print('average ',  curve_len/mini_batch_size)
+        avg_curve_len = curve_len/len(mini_batch)
+        self.weights = [(0.5*(1-eta*(lmbda/n))+0.5*(6.0/avg_curve_len))*w-(eta/len(mini_batch))*nw
                         for w, nw in zip(self.weights, nabla_w)]
         self.biases = [b-(eta/len(mini_batch))*nb
                        for b, nb in zip(self.biases, nabla_b)]
@@ -249,18 +273,11 @@ class CurveFittingNetwork(object):
         ## -------------------------------------- ###
         h = (x[3], x[0], x[1], x[2])
         param_deltas = np.array([calculate_observable_delta(h, 0), calculate_observable_delta(h, 1), calculate_observable_delta(h, 2)])
-        #print(param_deltas)
-        #print('-1-1')
         
-        #print(zs[-1], ' ', activations[-1], ' ', y)
         estimated_val = calculate_observable(h, activations[-1][0], activations[-1][1], activations[-1][2])
-        #print(estimated_val)
-        #print(y)
+
         delta = (estimated_val-y)*param_deltas*scaling_value
-        #delta = (self.cost).delta(zs[-1], activations[-1], y)
-        #print(delta)
-        #print(delta2)
-        #print('---')
+
         nabla_b[-1] = delta
         nabla_w[-1] = np.dot(delta, activations[-2].transpose())
         #-----------------------------------------##
@@ -305,13 +322,16 @@ class CurveFittingNetwork(object):
         """
 
 
-        results = [(self.feedforward(x), y) for (x, y) in data]
+        results = [(x, self.feedforward(x), y) for (x, y) in data]
         mse_sum = 0.0
         count = 0
-        for (y_out, y_true) in results:
+        for (x, out, y_true) in results:
+            y_est = calculate_observable((x[3], x[0], x[1], x[2]), out[0], out[1], out[2])
+            #print(y_est, ' ', y_true)
+            #print('-')
             count+=1
-            tmp = sum((y_out-y_true)*(y_out-y_true))
-            mse_sum+= float(tmp[0])
+            tmp = sum((y_est-y_true)*(y_est-y_true))
+            mse_sum+= tmp
             #print(mse_sum)
         #print(type(mse_sum), ' ', type(count))
         out=(mse_sum / count)*1.0
@@ -394,5 +414,8 @@ def ELU(val):
         return val
     else:
         return np.exp(val)-1.0
+
+#def output_activation(val):
+
 
 

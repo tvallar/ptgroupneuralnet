@@ -66,6 +66,7 @@ constraints = ((-np.inf, -np.inf, -np.inf), # Parameter Lower Bounds
                (np.inf, np.inf, np.inf)) # Parameter upper bounds
 
 fittedParameters, pcov = curve_fit(calculate_observable, h, y, initialParameters)#, bounds=constraints)
+print(fittedParameters)
 
 p0,p1,p2 = fittedParameters
 output = calculate_observable(h, p0, p1, p2)
@@ -86,14 +87,14 @@ print('RMSE: ', rmse(y, output))
 ## Model Parameters
 num_inputs = 6
 num_outputs = 3
-learning_rate = 0.0008
-regularization_rate = 0.0001
-iterations = 2000
-batch_size = 30
+learning_rate = 0.03
+regularization_rate = 0.1
+iterations = 300
+batch_size = 5
 
-layers = [num_inputs, 100, num_outputs]
+layers = [num_inputs, 40, num_outputs]
 
-model_deep_network = CFN.CurveFittingNetwork(layers)
+model_deep_network = CFN.CurveFittingNetwork(layers, parameter_scaling=0.0000000000001)
 
 #model_gradient_boosting=GradientBoostingRegressor(loss='ls', learning_rate=0.1, n_estimators=100, subsample=1.0, criterion='friedman_mse', min_samples_split=2, 
 #    min_samples_leaf=1, min_weight_fraction_leaf=0.0, max_depth=3, min_impurity_decrease=0.0, min_impurity_split=None, init=None, random_state=42, 
@@ -131,7 +132,7 @@ for i in range(len(X_test)):
 
 
 eval_cost, eval_acc, train_cost, train_acc = model_deep_network.SGD(training_data, iterations, batch_size, learning_rate, 
-                        lmbda=regularization_rate, scaling_value=0.0001, evaluation_data=test_eval_data,
+                        lmbda=regularization_rate, scaling_value=0.02, shrinking_learn_rate=True, evaluation_data=test_eval_data,
                          monitor_evaluation_accuracy=True, monitor_evaluation_cost=True)
 
 predicted_dnn =[]
@@ -139,7 +140,7 @@ actual_dnn = []
 for (x,y) in test_eval_data:
     out = model_deep_network.feedforward(x)
     h_tmp = (x[3], x[0], x[1], x[2])
-    predicted_dnn.append(calculate_observable(h, out[0]*normalizer, out[1]*normalizer, out[2]*normalizer))
+    predicted_dnn.append(calculate_observable(h, out[0], out[1], out[2]))
     actual_dnn.append(y)
 predicted_dnn=np.array(predicted_dnn)
 actual_dnn=np.array(actual_dnn)
@@ -162,9 +163,7 @@ def get_graph_arrays(line_value, x_axis, model):
     model_curve1 = []
     for i in range(len(x_axis)):
         params_tmp = model.feedforward(np.array([[x_b1[i]], [t_1[i]], [Q_1[i]], [x_axis[i]], [np.cos(x_axis[i])], [np.cos(x_axis[i]*x_axis[i])]]))
-        #print(x_axis[i], ' ', x_b1[i], ' ', t_1[i], ' ', Q_1[i])
-        #print(params_tmp)
-        #print(p0,' ', p1, ' ', p2)
+
         data1_tmp = (x_axis[i],x_b1[i], t_1[i], Q_1[i])
         model_curve1.append(calculate_observable(data1_tmp, params_tmp[0][0], params_tmp[1][0], params_tmp[2][0]))
 
