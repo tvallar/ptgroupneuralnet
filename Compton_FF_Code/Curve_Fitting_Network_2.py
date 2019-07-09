@@ -1,13 +1,7 @@
 """network2.py
 ~~~~~~~~~~~~~~
 
-An improved version of network.py, implementing the stochastic
-gradient descent learning algorithm for a feedforward neural network.
-Improvements include the addition of the cross-entropy cost function,
-regularization, and better initialization of network weights.  Note
-that I have focused on making the code simple, easily readable, and
-easily modifiable.  It is not optimized, and omits many desirable
-features.
+Version of Curve FItting Network that uses windows instead of derivatives
 
 """
 
@@ -105,7 +99,7 @@ def curve_length(xb, t, q, par0, par1, par2):
     return total
 
 #### Main Network class
-class CurveFittingNetwork(object):
+class CurveFittingNetwork2(object):
 
     def __init__(self, sizes, cost=QuadraticCost, activation='sigmoid', Function=calculate_observable, parameter_scaling=1.0):
         """The list ``sizes`` contains the number of neurons in the respective
@@ -284,7 +278,8 @@ class CurveFittingNetwork(object):
         # This is where the deltas for the output node is being found
         ## -------------------------------------- ###
         h = (x[3], x[0], x[1], x[2])
-        param_deltas = np.array([calculate_observable_delta(h, 0), calculate_observable_delta(h, 1), calculate_observable_delta(h, 2)])
+        param_deltas = np.array([[1.0],[1.0],[1.0]])
+        #np.array([calculate_observable_delta(h, 0), calculate_observable_delta(h, 1), calculate_observable_delta(h, 2)])
         
         estimated_val = calculate_observable(h, activations[-1][0], activations[-1][1], activations[-1][2])
 

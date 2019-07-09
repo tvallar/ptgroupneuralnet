@@ -12,6 +12,7 @@ from sklearn.neural_network import MLPRegressor
 from sklearn.ensemble import GradientBoostingRegressor
 
 import Curve_Fitting_Network as CFN
+import Curve_Fitting_Network_2 as CFN2
 
 def rmse(estimated, actual):
     n = len(estimated)
@@ -23,6 +24,9 @@ def calculate_observable(data, par0, par1, par2):
     #-1/(par[3]*par[3]*par[4]*(1+2*par[3]*M_p*2*par[3]*M_p/(par[5]*par[5]))*(1+2*par[3]*M_p*2*par[3]*M_p/(par[5]*par[5])))*(par[0]
     #+ par[1]*cos(x[0]) + par[2]*cos(x[0]*x[0]));
     return -1/(x_b*x_b*t*(1+2*x_b*M_p*2*x_b*M_p/(Q*Q))*(1+2*x_b*M_p*2*x_b*M_p/(Q*Q)))*(par0 + par1*np.cos(x) + par2*np.cos(x*x))
+
+def uniform_sample(val, error):
+    return np.random.uniform(low=val-error, high=val+error)
 
 data = pd.read_csv('./Compton_FF_Code/data_ff.csv')
 attributes =['X', 'X_b', 'Q', 't', 'F']
@@ -87,28 +91,28 @@ print('RMSE: ', rmse(y, output))
 ## Model Parameters
 num_inputs = 6
 num_outputs = 3
-learning_rate = 0.03
+learning_rate = 0.02
 regularization_rate = 0.1
-iterations = 300
+F_error_scaling = 0.04
+iterations = 1500
 batch_size = 5
-
 layers = [num_inputs, 40, num_outputs]
 
-model_deep_network = CFN.CurveFittingNetwork(layers, parameter_scaling=0.0000000000001)
+model_deep_network = CFN2.CurveFittingNetwork2(layers, parameter_scaling=0.0000000000001)
 
 #model_gradient_boosting=GradientBoostingRegressor(loss='ls', learning_rate=0.1, n_estimators=100, subsample=1.0, criterion='friedman_mse', min_samples_split=2, 
 #    min_samples_leaf=1, min_weight_fraction_leaf=0.0, max_depth=3, min_impurity_decrease=0.0, min_impurity_split=None, init=None, random_state=42, 
 #    max_features=None, alpha=0.9, verbose=0, max_leaf_nodes=None, warm_start=False, presort='auto', validation_fraction=0.1, n_iter_no_change=None, tol=0.0001)
 
 
-normalizer = 0.2
+#normalizer = 0.2
 #y_data = F
 #np.zeros((len(x_b), 1)) + [p0/normalizer, p1/normalizer, p2/normalizer]
 X_data = []
 y_data = []
 for i in range(len(x_b)):
     X_data.append([x_b[i], t[i], Q[i], X[i], np.cos(X[i]), np.cos(X[i]*X[i])])
-    y_data.append([calculate_observable((X[i],x_b[i], t[i], Q[i]), p0, p1, p2)])
+    y_data.append([uniform_sample(F[i], errF[i])])
 X_data = np.array(X_data)
 y_data = np.array(y_data)
 
@@ -132,7 +136,7 @@ for i in range(len(X_test)):
 
 
 eval_cost, eval_acc, train_cost, train_acc = model_deep_network.SGD(training_data, iterations, batch_size, learning_rate, 
-                        lmbda=regularization_rate, scaling_value=0.02, shrinking_learn_rate=True, evaluation_data=test_eval_data,
+                        lmbda=regularization_rate, scaling_value=F_error_scaling, shrinking_learn_rate=True, evaluation_data=test_eval_data,
                          monitor_evaluation_accuracy=True, monitor_evaluation_cost=True)
 
 predicted_dnn =[]
@@ -149,8 +153,11 @@ actual_dnn=np.array(actual_dnn)
 
 
 print('Model Scoring Results')
-print('RMSE of Parameter Predictions for DNN: ', rmse(predicted_dnn, actual_dnn))
+print('RMSE of Observable Predictions for DNN: ', rmse(predicted_dnn, actual_dnn))
 print('RMSE of Observable Values: ', )
+
+print('Correct Params: ')
+print(p0,' ', p1, ' ', p2)
 
 def get_graph_arrays(line_value, x_axis, model):
     line1 = line_value
@@ -166,9 +173,12 @@ def get_graph_arrays(line_value, x_axis, model):
 
         data1_tmp = (x_axis[i],x_b1[i], t_1[i], Q_1[i])
         model_curve1.append(calculate_observable(data1_tmp, params_tmp[0][0], params_tmp[1][0], params_tmp[2][0]))
+        if i==0:
+            print(params_tmp[0][0],' ', params_tmp[1][0], ' ', params_tmp[2][0])
 
     return data1, model_curve1
 
+print('Estimated Params for each graph: ')
 x_axis = np.linspace(0, 6, num=100)
 line1 = 0
 data1, dnn_curve1 = get_graph_arrays(line1, x_axis, model_deep_network)
@@ -177,7 +187,7 @@ true_curve1 = calculate_observable(data1, p0, p1, p2)
 
 line2=60
 data2, dnn_curve2 = get_graph_arrays(line2, x_axis, model_deep_network)
-true_curve2 = calculate_observable(data1, p0, p1, p2)
+true_curve2 = calculate_observable(data2, p0, p1, p2)
 #print('Chi Squared of Second Curve for Deep Network: ', stats.chisquare(true_curve2, dnn_curve2) ) 
 
 line3 = 65
