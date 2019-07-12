@@ -214,24 +214,27 @@ class CurveFittingNetwork(object):
                         mini_batch, eta, lmbda, len(training_data), scaling_value)
             if j%10==0:
                 print("Epoch %s training complete" % j)
-                if monitor_training_cost:
-                    cost = self.total_cost(training_data, lmbda)
-                    training_cost.append(cost)
+            if monitor_training_cost:
+                cost = self.total_cost(training_data, lmbda)
+                training_cost.append(cost)
+                if j%10==0:
                     print ("Cost on training data: {}".format(cost))
-                if monitor_training_accuracy:
-                    accuracy = self.accuracy(training_data, convert=True)
-                    training_accuracy.append(accuracy)
-                    print("Accuracy on training data: {} / {}".format(
-                        accuracy, n))
-                if monitor_evaluation_cost:
-                    cost = self.total_cost(evaluation_data, lmbda, convert=True)
-                    evaluation_cost.append(cost)
+            if monitor_training_accuracy:
+                accuracy = self.accuracy(training_data, convert=True)
+                training_accuracy.append(accuracy)
+                if j%10==0:
+                    print("Accuracy on training data: {}".format(accuracy))
+            if monitor_evaluation_cost:
+                cost = self.total_cost(evaluation_data, lmbda, convert=True)
+                evaluation_cost.append(cost)
+                if j%10==0:
                     print("Cost on evaluation data: {}".format(cost))
-                if monitor_evaluation_accuracy:
-                    accuracy = self.accuracy(evaluation_data)
-                    evaluation_accuracy.append(accuracy)
-                    print("Accuracy on evaluation data: {} / {}".format(
-                        self.accuracy(evaluation_data), n_data))
+            if monitor_evaluation_accuracy:
+                accuracy = self.accuracy(evaluation_data)
+                evaluation_accuracy.append(accuracy)
+                if j%10==0:
+                    print("Accuracy on evaluation data: {}".format(accuracy))
+            if j%10==0:
                 print()
         return evaluation_cost, evaluation_accuracy, \
             training_cost, training_accuracy
@@ -339,13 +342,9 @@ class CurveFittingNetwork(object):
         count = 0
         for (x, out, y_true) in results:
             y_est = calculate_observable((x[3], x[0], x[1], x[2]), out[0], out[1], out[2])
-            #print(y_est, ' ', y_true)
-            #print('-')
             count+=1
             tmp = sum((y_est-y_true)*(y_est-y_true))
             mse_sum+= tmp
-            #print(mse_sum)
-        #print(type(mse_sum), ' ', type(count))
         out=(mse_sum / count)*1.0
         return out
 
@@ -359,7 +358,7 @@ class CurveFittingNetwork(object):
         cost = 0.0
         for x, y in data:
             a = self.feedforward(x)
-            cost += self.cost.fn(a, y)/len(data)
+            cost += self.cost.fn(calculate_observable((x[3], x[0], x[1], x[2]), a[0][0], a[1][0], a[2][0]), y)/len(data)
         cost += 0.5*(lmbda/len(data))*sum(
             np.linalg.norm(w)**2 for w in self.weights)
         return cost

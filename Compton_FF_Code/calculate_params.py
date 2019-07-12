@@ -28,6 +28,26 @@ def calculate_observable(data, par0, par1, par2):
 def uniform_sample(val, error):
     return np.random.uniform(low=val-error, high=val+error)
 
+def get_graph_arrays(line_value, x_axis, model):
+        line1 = line_value
+        #x_axis = np.linspace(0, 6, num=100)
+        x_b1 = np.zeros((len(x_axis))) + x_b[line1*7]
+        t_1 = np.zeros((len(x_axis))) + t[line1*7]
+        Q_1 = np.zeros((len(x_axis))) + Q[line1*7]
+        data1 = (x_axis, x_b1, t_1, Q_1)
+
+        model_curve1 = []
+        for i in range(len(x_axis)):
+            params_tmp = model.feedforward(np.array([[x_b1[i]], [t_1[i]], [Q_1[i]], [x_axis[i]], [np.cos(x_axis[i])], [np.cos(x_axis[i]*x_axis[i])]]))
+
+            data1_tmp = (x_axis[i],x_b1[i], t_1[i], Q_1[i])
+            model_curve1.append(calculate_observable(data1_tmp, params_tmp[0][0], params_tmp[1][0], params_tmp[2][0]))
+            if i==0:
+                print(params_tmp[0][0],' ', params_tmp[1][0], ' ', params_tmp[2][0])
+
+        return data1, model_curve1
+
+
 data = pd.read_csv('./Compton_FF_Code/data_ff.csv')
 attributes =['X', 'X_b', 'Q', 't', 'F']
 scatter_matrix(data[attributes])
@@ -91,14 +111,13 @@ print('RMSE: ', rmse(y, output))
 ## Model Parameters
 num_inputs = 6
 num_outputs = 3
-learning_rate = 0.02
-regularization_rate = 0.1
-F_error_scaling = 0.04
-iterations = 1500
+learning_rate = 0.025
+regularization_rate = 0.18
+F_error_scaling = 0.03
+iterations = 1400
 batch_size = 5
-layers = [num_inputs, 40, num_outputs]
+layers = [num_inputs, 12, num_outputs]
 
-model_deep_network = CFN2.CurveFittingNetwork2(layers, parameter_scaling=0.0000000000001)
 
 #model_gradient_boosting=GradientBoostingRegressor(loss='ls', learning_rate=0.1, n_estimators=100, subsample=1.0, criterion='friedman_mse', min_samples_split=2, 
 #    min_samples_leaf=1, min_weight_fraction_leaf=0.0, max_depth=3, min_impurity_decrease=0.0, min_impurity_split=None, init=None, random_state=42, 
@@ -134,97 +153,138 @@ test_eval_data = []
 for i in range(len(X_test)):
     test_eval_data.append((np.reshape(X_test[i],(num_inputs,1)), np.reshape(y_test[i],(1))))
 
-
-eval_cost, eval_acc, train_cost, train_acc = model_deep_network.SGD(training_data, iterations, batch_size, learning_rate, 
-                        lmbda=regularization_rate, scaling_value=F_error_scaling, shrinking_learn_rate=True, evaluation_data=test_eval_data,
-                         monitor_evaluation_accuracy=True, monitor_evaluation_cost=True)
-
-predicted_dnn =[]
-actual_dnn = []
-for (x,y) in test_eval_data:
-    out = model_deep_network.feedforward(x)
-    h_tmp = (x[3], x[0], x[1], x[2])
-    predicted_dnn.append(calculate_observable(h, out[0], out[1], out[2]))
-    actual_dnn.append(y)
-predicted_dnn=np.array(predicted_dnn)
-actual_dnn=np.array(actual_dnn)
-#for xt, yt in zip(predicted[:10], y_test[:10]):
-    #print (xt, ' | ', yt)
+while(True):
+    
 
 
-print('Model Scoring Results')
-print('RMSE of Observable Predictions for DNN: ', rmse(predicted_dnn, actual_dnn))
-print('RMSE of Observable Values: ', )
+    res = input('Do you want to: \n(1) retrain the network \n(2) load from a saved model \n(3) graph multiple models or \n(4) Exit?\n')
+    
+    if res=='4':
+        print('Exiting..')
+        break
+    
+    model_type = input('Which model would you like to use?\n(1) Model using Derivatives \n(2) Model Without Derivatives\n')
+    if res == '1':
 
-print('Correct Params: ')
-print(p0,' ', p1, ' ', p2)
+        
+        if model_type=='1':
+            model_deep_network = CFN.CurveFittingNetwork(layers, parameter_scaling=0.0000000000001)
+        elif model_type=='2':
+            model_deep_network = CFN2.CurveFittingNetwork2(layers, parameter_scaling=0.0000000000001)
 
-def get_graph_arrays(line_value, x_axis, model):
-    line1 = line_value
-    #x_axis = np.linspace(0, 6, num=100)
-    x_b1 = np.zeros((len(x_axis))) + x_b[line1*7]
-    t_1 = np.zeros((len(x_axis))) + t[line1*7]
-    Q_1 = np.zeros((len(x_axis))) + Q[line1*7]
-    data1 = (x_axis, x_b1, t_1, Q_1)
+        filen = input('Enter Filename to save network under (e.g. saved_network.txt): ')
+        eval_cost, eval_acc, train_cost, train_acc = model_deep_network.SGD(training_data, iterations, batch_size, learning_rate, 
+                            lmbda=regularization_rate, scaling_value=F_error_scaling, shrinking_learn_rate=True, evaluation_data=test_eval_data,
+                            monitor_training_accuracy=True, monitor_training_cost=True, monitor_evaluation_accuracy=True, monitor_evaluation_cost=True)
 
-    model_curve1 = []
-    for i in range(len(x_axis)):
-        params_tmp = model.feedforward(np.array([[x_b1[i]], [t_1[i]], [Q_1[i]], [x_axis[i]], [np.cos(x_axis[i])], [np.cos(x_axis[i]*x_axis[i])]]))
+        
+        model_deep_network.save(filen)
 
-        data1_tmp = (x_axis[i],x_b1[i], t_1[i], Q_1[i])
-        model_curve1.append(calculate_observable(data1_tmp, params_tmp[0][0], params_tmp[1][0], params_tmp[2][0]))
-        if i==0:
-            print(params_tmp[0][0],' ', params_tmp[1][0], ' ', params_tmp[2][0])
+        plt.title('Graph of Cost for Training and Eval Cost')
+        plt.plot(np.arange(start=10, stop=iterations), eval_cost[10:], 'r--', label='Evaluation Accuracy')
+        plt.plot(np.arange(start=10, stop=iterations), train_cost[10:], 'b--', label='Training Accuracy')
+        plt.xlabel('Iteration')
+        plt.ylabel('Accuracy')
 
-    return data1, model_curve1
 
-print('Estimated Params for each graph: ')
-x_axis = np.linspace(0, 6, num=100)
-line1 = 0
-data1, dnn_curve1 = get_graph_arrays(line1, x_axis, model_deep_network)
-true_curve1 = calculate_observable(data1, p0, p1, p2)
-#print('Chi Squared of First Curve for Deep Network: ', stats.chisquare(true_curve1, dnn_curve1) ) 
+        predicted_dnn =[]
+        actual_dnn = []
+        for (x,y) in test_eval_data:
+            out = model_deep_network.feedforward(x)
+            h_tmp = (x[3], x[0], x[1], x[2])
+            predicted_dnn.append(calculate_observable(h, out[0], out[1], out[2]))
+            actual_dnn.append(y)
+        predicted_dnn=np.array(predicted_dnn)
+        actual_dnn=np.array(actual_dnn)
+        layers_string = ''
+        for x in layers:
+            layers_string+=''+str(x)+' '
 
-line2=60
-data2, dnn_curve2 = get_graph_arrays(line2, x_axis, model_deep_network)
-true_curve2 = calculate_observable(data2, p0, p1, p2)
-#print('Chi Squared of Second Curve for Deep Network: ', stats.chisquare(true_curve2, dnn_curve2) ) 
-
-line3 = 65
-data3, dnn_curve3 = get_graph_arrays(line3, x_axis, model_deep_network)
-true_curve3 = calculate_observable(data3, p0, p1, p2)
-#print('Chi Squared of Third Curve for Deep Network: ', stats.chisquare(true_curve3, dnn_curve3) ) 
+        rmse_val = rmse(predicted_dnn, actual_dnn)
+        fin_eval_cost = eval_cost[-1]
+        fin_training_cost = train_cost[-1]
+        with open("model_results.csv", "a") as myfile:
+            myfile.write('{0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9}\n'.format(layers_string, learning_rate, regularization_rate, F_error_scaling, 
+                                            iterations, batch_size, rmse_val, fin_eval_cost, fin_training_cost, filen))
 
 
 
-plt.title('Graph of observables vs X')
+        plt.legend()
+        plt.show()
+    elif res=='2':
+        filen = input('Enter Saved Network Name (e.g. saved_network.txt): ')
+        if model_type=='1':
+            model_deep_network = CFN.load(filen)
+        elif model_type=='2':
+            model_deep_network = CFN2.load(filen)
+    elif res=='3':
+        x_axis = np.linspace(0, 6, num=100)
+        plt.title('Graph of observables vs X')
+        print('Graph model on lines (normal ones are 0, 60, 65)')
+        line1 = int(input('Enter Line Number (0-65): '))
 
-plt.errorbar(X[line1*7:(line1+1)*7], F[line1*7:(line1+1)*7], errF[line1*7:(line1+1)*7],  None, 'bo', label='t={0} x_b={1} Q={2}'.format(t[line1*7],x_b[line1*7], Q[line1*7])) # plot the raw data
-plt.plot(x_axis, true_curve1, 'b--', alpha=0.5, label='Curve fit') # plot the raw data
-plt.plot(x_axis, dnn_curve1, 'b-', label='Deep Network fit') # plot the raw data
+        plt.errorbar(X[line1*7:(line1+1)*7], F[line1*7:(line1+1)*7], errF[line1*7:(line1+1)*7],  None, 'bo', label='t={0} x_b={1} Q={2}'.format(t[line1*7],x_b[line1*7], Q[line1*7])) # plot the raw data
+        
+        
+        plt.xlabel('X value')
+        for i in range(8):
+            model_deep_network = CFN.load('saved_network{0}.txt'.format(i+1))
+            data1, dnn_curve1 = get_graph_arrays(line1, x_axis, model_deep_network)
+            true_curve1 = calculate_observable(data1, p0, p1, p2)
+            plt.plot(x_axis, true_curve1, 'b--', alpha=0.5, label='Curve fit') # plot the raw data
+            plt.plot(x_axis, dnn_curve1, 'b-', label='Deep Network fit') # plot the raw data
+    
+        plt.ylabel('Observables')
 
-plt.xlabel('X value')
-plt.ylabel('Observables')
+        plt.legend()
+        plt.show()
+    predicted_dnn =[]
+    actual_dnn = []
+    for (x,y) in test_eval_data:
+        out = model_deep_network.feedforward(x)
+        h_tmp = (x[3], x[0], x[1], x[2])
+        predicted_dnn.append(calculate_observable(h, out[0], out[1], out[2]))
+        actual_dnn.append(y)
+    predicted_dnn=np.array(predicted_dnn)
+    actual_dnn=np.array(actual_dnn)
+    #for xt, yt in zip(predicted[:10], y_test[:10]):
+        #print (xt, ' | ', yt)
 
-plt.legend()
-plt.show()
 
-plt.errorbar(X[line2*7:(line2+1)*7], F[line2*7:(line2+1)*7], errF[line2*7:(line2+1)*7], None,  'go', label='t={0} x_b={1} Q={2}'.format(t[line2*7],x_b[line2*7], Q[line2*7])) # plot the raw data
-plt.plot(x_axis, true_curve2, 'g--', alpha=0.5, label='Curve fit 2') # plot the raw data
-plt.plot(x_axis, dnn_curve2, 'g-', label='Model fit') # plot the raw data
+    print('Model Scoring Results')
+    print('RMSE of Observable Predictions for DNN: ', )
+    print('RMSE of Observable Values: ', )
 
-plt.xlabel('X value')
-plt.ylabel('Observables')
+    print('Correct Params: ')
+    print(p0,' ', p1, ' ', p2)
 
-plt.legend()
-plt.show()
+   
+    while(True):
+        print('Graph model on lines (normal ones are 0, 60, 65)')
+        line1 = int(input('Enter Line Number (0-65): '))
 
-plt.errorbar(X[line3*7:(line3+1)*7], F[line3*7:(line3+1)*7], errF[line3*7:(line3+1)*7], None,  'ro', label='t={0} x_b={1} Q={2}'.format(t[line3*7],x_b[line3*7], Q[line3*7])) # plot the raw data
-plt.plot(x_axis, true_curve3, 'r--', alpha=0.5, label='Curve fit 3') # plot the raw data
-plt.plot(x_axis, dnn_curve3, 'r-', label='Model fit') # plot the raw data
+        print('Estimated Params for line: ')
+        
+        x_axis = np.linspace(0, 6, num=100)
+        data1, dnn_curve1 = get_graph_arrays(line1, x_axis, model_deep_network)
+        true_curve1 = calculate_observable(data1, p0, p1, p2)
 
-plt.xlabel('X value')
-plt.ylabel('Observables')
+        plt.title('Graph of observables vs X')
 
-plt.legend()
-plt.show()
+        plt.errorbar(X[line1*7:(line1+1)*7], F[line1*7:(line1+1)*7], errF[line1*7:(line1+1)*7],  None, 'bo', label='t={0} x_b={1} Q={2}'.format(t[line1*7],x_b[line1*7], Q[line1*7])) # plot the raw data
+        plt.plot(x_axis, true_curve1, 'b--', alpha=0.5, label='Curve fit') # plot the raw data
+        plt.plot(x_axis, dnn_curve1, 'b-', label='Deep Network fit') # plot the raw data
+
+        plt.xlabel('X value')
+        plt.ylabel('Observables')
+
+        plt.legend()
+        plt.show()
+
+        exit_check2 = input('Exit graphing? (Y/N)')
+        if exit_check2=='Y' or exit_check2=='y':
+            break
+
+
+
+
