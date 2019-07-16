@@ -47,10 +47,22 @@ def get_graph_arrays(line_value, x_axis, model):
 
         return data1, model_curve1
 
+def get_mean_and_std(values):
+    sum_tmp = 0.0
+    n = len(values)
+    for i in range(n):
+        sum_tmp+=values[i]
+    mean = sum_tmp/n
+    std_sum_tmp = 0.0
+    for i in range(n):
+        std_sum_tmp += (values[i]-mean)*(values[i]-mean)
+    std_dev = np.sqrt(std_sum_tmp/n)
+
+    return mean, std_dev
 
 data = pd.read_csv('./Compton_FF_Code/data_ff.csv')
 attributes =['X', 'X_b', 'Q', 't', 'F']
-scatter_matrix(data[attributes])
+#scatter_matrix(data[attributes])
 plt.show()
 
 print(data.columns)
@@ -89,8 +101,58 @@ initialParameters = np.array([1.0, 1.0, 1.0])
 constraints = ((-np.inf, -np.inf, -np.inf), # Parameter Lower Bounds
                (np.inf, np.inf, np.inf)) # Parameter upper bounds
 
+
+
+
+#Actually Very Real Parameters -------------------------------------------------- ##
 fittedParameters, pcov = curve_fit(calculate_observable, h, y, initialParameters)#, bounds=constraints)
+
+
+
+### getting parameters for each curve
+curve_fit_parameters = []
+curve_fit_pcov = []
+
+param0_list=[]
+param1_list=[]
+param2_list=[]
+
+for i in range(0, len(X), 7):
+    h=(X[i:(i+7)], x_b[i:(i+7)], t[i:(i+7)], Q[i:(i+7)])
+    y = F[i:(i+7)]
+    t_p, p_cov = curve_fit(calculate_observable, h, y, initialParameters)#, bounds=constraints)
+    curve_fit_parameters.append(t_p)
+    curve_fit_pcov.append(p_cov)
+
+    param0_list.append(t_p[0])
+    param1_list.append(t_p[1])
+    param2_list.append(t_p[2])
+
+    print(t_p)
 print(fittedParameters)
+
+par0_m, par0_std = get_mean_and_std(param0_list)
+print('Parameter 0 mean: {0} std dev: {1}'.format(par0_m, par0_std))
+par1_m, par1_std = get_mean_and_std(param1_list)
+print('Parameter 1 mean: {0} std dev: {1}'.format(par1_m, par1_std))
+par2_m, par2_std = get_mean_and_std(param2_list)
+print('Parameter 2 mean: {0} std dev: {1}'.format(par2_m, par2_std))
+
+plt.subplot(3,1,1)
+plt.hist(param0_list, label='Parameter 0')
+#fit_0 = stats.norm.pdf(param0_list, par0_m, par0_std)
+#plt.plot(param0_list, fit_0)
+plt.title('Parameters Curve_fit Histogram')
+plt.legend()
+
+plt.subplot(3,1,2)
+plt.hist(param1_list, label='Parameter 1')
+plt.legend()
+
+plt.subplot(3,1,3)
+plt.hist(param2_list, label='Paramter 2')
+plt.legend()
+plt.show()
 
 p0,p1,p2 = fittedParameters
 output = calculate_observable(h, p0, p1, p2)
@@ -111,9 +173,9 @@ print('RMSE: ', rmse(y, output))
 ## Model Parameters
 num_inputs = 6
 num_outputs = 3
-learning_rate = 0.025
-regularization_rate = 0.18
-F_error_scaling = 0.03
+learning_rate = 0.03
+regularization_rate = 0.1
+F_error_scaling = np.array([[0.03], [0.03], [0.12]])
 iterations = 1400
 batch_size = 5
 layers = [num_inputs, 12, num_outputs]
@@ -224,15 +286,17 @@ while(True):
         line1 = int(input('Enter Line Number (0-65): '))
 
         plt.errorbar(X[line1*7:(line1+1)*7], F[line1*7:(line1+1)*7], errF[line1*7:(line1+1)*7],  None, 'bo', label='t={0} x_b={1} Q={2}'.format(t[line1*7],x_b[line1*7], Q[line1*7])) # plot the raw data
-        
-        
+        model_deep_network = CFN.load('saved_network1.txt')
+        data1, dnn_curve1 = get_graph_arrays(line1, x_axis, model_deep_network)
+        true_curve1 = calculate_observable(data1, p0, p1, p2)
+        plt.plot(x_axis, true_curve1, 'b--', alpha=0.5, label='Curve fit', linewidth=0.8) # plot the raw data
+            
+        colors=['b-', 'r-', 'g-', 'c-', 'm-', 'y-', 'k-']
         plt.xlabel('X value')
         for i in range(8):
             model_deep_network = CFN.load('saved_network{0}.txt'.format(i+1))
             data1, dnn_curve1 = get_graph_arrays(line1, x_axis, model_deep_network)
-            true_curve1 = calculate_observable(data1, p0, p1, p2)
-            plt.plot(x_axis, true_curve1, 'b--', alpha=0.5, label='Curve fit') # plot the raw data
-            plt.plot(x_axis, dnn_curve1, 'b-', label='Deep Network fit') # plot the raw data
+            plt.plot(x_axis, dnn_curve1, colors[i%len(colors)], label='Deep Network fit', linewidth=0.8) # plot the raw data
     
         plt.ylabel('Observables')
 
