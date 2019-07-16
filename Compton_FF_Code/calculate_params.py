@@ -175,9 +175,9 @@ num_inputs = 6
 num_outputs = 3
 learning_rate = 0.03
 regularization_rate = 0.1
-F_error_scaling = np.array([[0.03], [0.03], [0.12]])
-iterations = 1400
-batch_size = 5
+F_error_scaling = np.array([[0.03], [0.03], [0.09]])
+iterations = 1800
+batch_size = 6
 layers = [num_inputs, 12, num_outputs]
 
 
@@ -331,7 +331,7 @@ while(True):
         
         x_axis = np.linspace(0, 6, num=100)
         data1, dnn_curve1 = get_graph_arrays(line1, x_axis, model_deep_network)
-        true_curve1 = calculate_observable(data1, p0, p1, p2)
+        true_curve1 = calculate_observable(data1, param0_list[line1], param1_list[line1], param2_list[line1])
 
         plt.title('Graph of observables vs X')
 
