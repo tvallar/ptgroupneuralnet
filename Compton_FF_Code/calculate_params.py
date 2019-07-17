@@ -328,8 +328,11 @@ while(True):
     print('Model Scoring Results')
     print('RMSE of Observable Predictions for DNN: ', )
     print('RMSE of Observable Values: ', )
+    print()
+    print('Actual Fully Correct Parameters: ')
+    print(actualParameters)
 
-    print('Correct Params: ')
+    print('All Data With Error Fitted Params: ')
     print(p0,' ', p1, ' ', p2)
 
    
