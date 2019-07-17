@@ -101,11 +101,17 @@ initialParameters = np.array([1.0, 1.0, 1.0])
 constraints = ((-np.inf, -np.inf, -np.inf), # Parameter Lower Bounds
                (np.inf, np.inf, np.inf)) # Parameter upper bounds
 
-
-
+y_w_error = []
+for i in range(len(y)):
+    y_w_error.append(uniform_sample(F[i], errF[i]))
+y_w_error = np.array(y_w_error)
 
 #Actually Very Real Parameters -------------------------------------------------- ##
-fittedParameters, pcov = curve_fit(calculate_observable, h, y, initialParameters)#, bounds=constraints)
+actualParameters, pcov = curve_fit(calculate_observable, h, y, initialParameters)#, bounds=constraints)
+
+
+
+fittedParameters, pcov = curve_fit(calculate_observable, h, y_w_error, initialParameters)#, bounds=constraints)
 
 
 
@@ -233,9 +239,9 @@ while(True):
 
         
         if model_type=='1':
-            model_deep_network = CFN.CurveFittingNetwork(layers, parameter_scaling=0.0000000000001)
+            model_deep_network = CFN.CurveFittingNetwork(layers)
         elif model_type=='2':
-            model_deep_network = CFN2.CurveFittingNetwork2(layers, parameter_scaling=0.0000000000001)
+            model_deep_network = CFN2.CurveFittingNetwork2(layers)
 
         filen = input('Enter Filename to save network under (e.g. saved_network.txt): ')
         eval_cost, eval_acc, train_cost, train_acc = model_deep_network.SGD(training_data, iterations, batch_size, learning_rate, 
@@ -335,12 +341,15 @@ while(True):
         
         x_axis = np.linspace(0, 6, num=100)
         data1, dnn_curve1 = get_graph_arrays(line1, x_axis, model_deep_network)
-        true_curve1 = calculate_observable(data1, param0_list[line1], param1_list[line1], param2_list[line1])
+
+        true_curve1 = calculate_observable(data1, p0, p1, p2)
+        true_curve2 = calculate_observable(data1, param0_list[line1], param1_list[line1], param2_list[line1])
 
         plt.title('Graph of observables vs X')
 
-        plt.errorbar(X[line1*7:(line1+1)*7], F[line1*7:(line1+1)*7], errF[line1*7:(line1+1)*7],  None, 'bo', label='t={0} x_b={1} Q={2}'.format(t[line1*7],x_b[line1*7], Q[line1*7])) # plot the raw data
-        plt.plot(x_axis, true_curve1, 'b--', alpha=0.5, label='Curve fit') # plot the raw data
+        plt.errorbar(X[line1*7:(line1+1)*7], F[line1*7:(line1+1)*7], errF[line1*7:(line1+1)*7],  None, 'bo', label='t={0} x_b={1} Q={2}'.format(t[line1*7],x_b[line1*7], Q[line1*7]), alpha=0.8) # plot the raw data
+        plt.plot(x_axis, true_curve1, 'g--', alpha=0.5, label='All Data Curve fit') # plot the raw data
+        plt.plot(x_axis, true_curve2, 'r--', alpha=0.5, label='Just These Points Curve fit') # plot the raw data
         plt.plot(x_axis, dnn_curve1, 'b-', label='Deep Network fit') # plot the raw data
 
         plt.xlabel('X value')
