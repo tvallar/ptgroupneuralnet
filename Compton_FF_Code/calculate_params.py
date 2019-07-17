@@ -119,7 +119,10 @@ param2_list=[]
 
 for i in range(0, len(X), 7):
     h=(X[i:(i+7)], x_b[i:(i+7)], t[i:(i+7)], Q[i:(i+7)])
-    y = F[i:(i+7)]
+    y = []
+    for j in range(7):
+        y.append(uniform_sample(F[i+j], errF[i+j]))
+    y = np.array(y)
     t_p, p_cov = curve_fit(calculate_observable, h, y, initialParameters)#, bounds=constraints)
     curve_fit_parameters.append(t_p)
     curve_fit_pcov.append(p_cov)
@@ -173,11 +176,11 @@ print('RMSE: ', rmse(y, output))
 ## Model Parameters
 num_inputs = 6
 num_outputs = 3
-learning_rate = 0.03
-regularization_rate = 0.1
+learning_rate = 0.025
+regularization_rate = 0.12
 F_error_scaling = np.array([[0.03], [0.03], [0.09]])
-iterations = 1800
-batch_size = 6
+iterations = 2400
+batch_size = 4
 layers = [num_inputs, 12, num_outputs]
 
 
@@ -293,7 +296,7 @@ while(True):
             
         colors=['b-', 'r-', 'g-', 'c-', 'm-', 'y-', 'k-']
         plt.xlabel('X value')
-        for i in range(8):
+        for i in range(14):
             model_deep_network = CFN.load('saved_network{0}.txt'.format(i+1))
             data1, dnn_curve1 = get_graph_arrays(line1, x_axis, model_deep_network)
             plt.plot(x_axis, dnn_curve1, colors[i%len(colors)], label='Deep Network fit', linewidth=0.8) # plot the raw data
@@ -301,6 +304,7 @@ while(True):
         plt.ylabel('Observables')
 
         plt.legend()
+        plt.savefig('test.png')
         plt.show()
     predicted_dnn =[]
     actual_dnn = []
