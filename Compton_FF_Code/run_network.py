@@ -10,8 +10,6 @@ import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
 from scipy import stats
 # My classes
-import Curve_Fitting_Network as CFN
-import Curve_Fitting_Network_2 as CFN2
 import Curve_Fitting_Network_Single as CFNS
 import BHDVCS as BHDVCS
 
@@ -177,7 +175,8 @@ while(True):
     network_results = []
     
     if res == '1':
-        line_num = int(input('Enter line(s) to train on or -1 to train on all: '))
+        print('The way the data is formatted is that each set of kinematic \n parameters has 36 points in a curve. By line number it is referring \n to which set of 36 points, and thus the kinematic variable values, to use when training \n Look at the data file DVCS_cross.csv to see this better')
+        line_num = int(input('Enter line to train on or -1 to train on all: '))
 
         ### Data generation
         #file_name = './Compton_FF_Code/DVCS_cross.csv'

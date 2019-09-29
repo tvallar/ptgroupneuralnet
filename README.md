@@ -5,6 +5,13 @@ All the code is in the Compton_FF_Code folder. The most up to date network is Cu
 To run the network, whether to load an older network or train a new one, run run_network.py.
 It will prompt for input in the terminal, asking what kind of operation you would like done whether it be (1) training a new group of networks (will prompt for the number of networks to create) (2) load a group of older, already trained networks or (3) exit
 
+# Important note:
+The network that is being used is Curve_Fitting_Network_Single.py
+This is the code that is commented.
+The other versions of this such as Curve_Fitting_Network and Curve_fitting_network_2 are older and function in a similar way but are not commented
+
+The way the data is formatted is that each set of kinematic parameters has 36 points in a curve. When training new networks, the code will ask for a line number. By line number it is referring to which set of 36 points, and thus the kinematic variable values, to use when training. Look at the data file DVCS_cross.csv to see this better.
+
 # Saving Networks:
 The networks will automatically save themselves once they are finished training. These will be saved into the networks folder.
 
