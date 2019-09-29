@@ -16,6 +16,10 @@ features.
 import json
 import random
 import sys
+import BHDVCS
+import math
+
+
 
 # Third-party libraries
 import numpy as np
@@ -70,15 +74,30 @@ def calculate_observable(data, par0, par1, par2):
     #+ par[1]*cos(x[0]) + par[2]*cos(x[0]*x[0]));
     return -1/(x_b*x_b*t*(1+2*x_b*M_p*2*x_b*M_p/(Q*Q))*(1+2*x_b*M_p*2*x_b*M_p/(Q*Q)))*(par0 + par1*np.cos(x) + par2*np.cos(x*x))
 
-def calculate_observable_delta(data, par_num):
-    x, x_b, t, Q = data
-    M_p = 0.938 #GeV
+def calculate_observable_delta(angle, pars, par_num, bhdvcs):
+    temp1 = bhdvcs.TotalUUXS(angle, pars)
+    #print(angle)
+    #print('test')
+    step = 0.001
     if par_num == 0:
-        return -1/(x_b*x_b*t*(1+2*x_b*M_p*2*x_b*M_p/(Q*Q))*(1+2*x_b*M_p*2*x_b*M_p/(Q*Q)))
+        
+        pars[4] = pars[4]+step
+        pars[6] = pars[6]+step
+        #print('test2')
+        temp2 = bhdvcs.TotalUUXS(angle, pars)
+        #print('test3')
+        return (temp2-temp1)/step
     elif par_num ==1:
-        return -1/(x_b*x_b*t*(1+2*x_b*M_p*2*x_b*M_p/(Q*Q))*(1+2*x_b*M_p*2*x_b*M_p/(Q*Q)))*np.cos(x)
+        #step = 0.1
+        pars[5] = pars[5]+step
+        pars[7] = pars[7]+step
+        temp2 = bhdvcs.TotalUUXS(angle, pars)
+        return (temp2-temp1)/step
     elif par_num==2:
-        return -1/(x_b*x_b*t*(1+2*x_b*M_p*2*x_b*M_p/(Q*Q))*(1+2*x_b*M_p*2*x_b*M_p/(Q*Q)))*(np.cos(x*x))
+        #step = 0.1
+        pars[8] = pars[8]+step
+        temp2 = bhdvcs.TotalUUXS(angle, pars)
+        return (temp2-temp1)/step
     else:
         return 0.0
 
@@ -123,6 +142,11 @@ class CurveFittingNetwork(object):
         self.sizes = sizes
         self.default_weight_initializer(parameter_scaling)
         self.cost=cost
+        self.bhdvcs = BHDVCS.BHDVCS()
+        self.best_params = {}
+        self.param_ranges = {}
+        self.next_params = {}
+        self.next_params_count = {}
 
     def default_weight_initializer(self, parameter_scaling):
         """Initialize each weight using a Gaussian distribution with mean 0
@@ -157,19 +181,23 @@ class CurveFittingNetwork(object):
         instead.
 
         """
-        self.biases = [np.random.randn(y, 1) for y in self.sizes[1:]]
-        self.weights = [np.random.randn(y, x)
-                        for x, y in zip(self.sizes[:-1], self.sizes[1:])]
+        self.biases = np.abs([np.random.randn(y, 1) for y in self.sizes[1:]])
+        self.weights = np.abs([np.random.randn(y, x)
+                        for x, y in zip(self.sizes[:-1], self.sizes[1:])])
 
     def feedforward(self, a):
         """Return the output of the network if ``a`` is input."""
+        zs = []
         for b, w in zip(self.biases, self.weights):
+            zs = np.dot(w, a)+b
             a = sigmoid(np.dot(w, a)+b)
-        return a
+            
+        return zs
 
     def SGD(self, training_data, epochs, mini_batch_size, eta,
             lmbda = 0.0,
             scaling_value=0.1,
+            param_ranges=[[0.0,1.5],[0.0,1.5],[0.0,1.5]],
             shrinking_learn_rate=False,
             evaluation_data=None,
             monitor_evaluation_cost=False,
@@ -195,6 +223,19 @@ class CurveFittingNetwork(object):
         are empty if the corresponding flag is not set.
 
         """
+        ###Initialization###
+        for x, y, ang, y_par in training_data:
+            dict_string = '{0}-{1}-{2}-{3}'.format(x[2], x[0], x[1], x[3])
+            if not(dict_string in self.param_ranges.keys()):
+                self.param_ranges[dict_string] = [[param_ranges[0], param_ranges[1]],[param_ranges[0], param_ranges[1]],[param_ranges[0], param_ranges[1]]]
+
+            #pars = [x[2], x[0], x[1], x[3], zs[-1][0], zs[-1][1], zs[-1][0], zs[-1][1], zs[-1][2],  0.014863]
+            if not(dict_string in self.best_params.keys()):
+                self.best_params[dict_string]=[0.75, 0.75, 0.75]
+                self.next_params[dict_string]=[0.0, 0.0, 0.0]
+                self.next_params_count[dict_string]=0
+
+
         self.mini_batch_size = mini_batch_size
         if evaluation_data: n_data = len(evaluation_data)
         n = len(training_data)
@@ -205,41 +246,70 @@ class CurveFittingNetwork(object):
             mini_batches = [
                 training_data[k:k+mini_batch_size]
                 for k in range(0, n, mini_batch_size)]
+            num_batches = len(mini_batches)
+            count = 0
             for mini_batch in mini_batches:
+                if count%10==0:
+                    print(count, ' / ', num_batches)
                 if shrinking_learn_rate:
                     self.update_mini_batch(
-                        mini_batch, eta, lmbda, len(training_data), scaling_value)
+                        mini_batch, eta, lmbda, len(training_data), param_ranges)
                 else:
                     self.update_mini_batch(
-                        mini_batch, eta, lmbda, len(training_data), scaling_value)
-            if j%10==0:
+                        mini_batch, eta, lmbda, len(training_data), param_ranges)
+            if j%1==0:
                 print("Epoch %s training complete" % j)
             if monitor_training_cost:
                 cost = self.total_cost(training_data, lmbda)
                 training_cost.append(cost)
-                if j%10==0:
+                if j%1==0:
                     print ("Cost on training data: {}".format(cost))
             if monitor_training_accuracy:
                 accuracy = self.accuracy(training_data, convert=True)
                 training_accuracy.append(accuracy)
-                if j%10==0:
+                if j%1==0:
                     print("Accuracy on training data: {}".format(accuracy))
             if monitor_evaluation_cost:
                 cost = self.total_cost(evaluation_data, lmbda, convert=True)
                 evaluation_cost.append(cost)
-                if j%10==0:
+                if j%1==0:
                     print("Cost on evaluation data: {}".format(cost))
             if monitor_evaluation_accuracy:
                 accuracy = self.accuracy(evaluation_data)
                 evaluation_accuracy.append(accuracy)
-                if j%10==0:
+                if j%1==0:
                     print("Accuracy on evaluation data: {}".format(accuracy))
-            if j%10==0:
+            if j%1==0:
+                for x, y, ang, y_par in training_data[:1]:
+                    out = self.feedforward(x)
+                    pars = [x[2], x[0], x[1], x[3], out[0], out[1], out[0], out[1], out[2],  0.014863]
+                    estimated = self.bhdvcs.TotalUUXS(ang, pars)
+                    print('Actual: ', y_par)
+                    print('Estimated: ', out)
+                    print('Observable Actual: ', y)
+                    print('Observable Estimated: ', estimated)
+                    dict_string = '{0}-{1}-{2}-{3}'.format(x[2], x[0], x[1], x[3])
+                    print('Paramter Ranges: ', self.param_ranges[dict_string])
+                    print('Best Parameters: ', self.best_params[dict_string])
                 print()
+                print()
+            
+            for dict_string in self.best_params.keys():
+                #dict_string = '{0}-{1}-{2}-{3}'.format(x[2], x[0], x[1], x[3])
+                self.best_params[dict_string][0] = self.next_params[dict_string][0]/self.next_params_count[dict_string]
+                self.best_params[dict_string][1] = self.next_params[dict_string][1]/self.next_params_count[dict_string]
+                self.best_params[dict_string][2] = self.next_params[dict_string][2]/self.next_params_count[dict_string]
+            
+                self.next_params[dict_string][0]= 0.0
+                self.next_params[dict_string][1]= 0.0
+                self.next_params[dict_string][2]= 0.0
+                
+                self.next_params_count[dict_string]=0
+
         return evaluation_cost, evaluation_accuracy, \
             training_cost, training_accuracy
 
-    def update_mini_batch(self, mini_batch, eta, lmbda, n, scaling_value):
+    def update_mini_batch(self, mini_batch, eta, lmbda, n, param_ranges):
         """Update the network's weights and biases by applying gradient
         descent using backpropagation to a single mini batch.  The
         ``mini_batch`` is a list of tuples ``(x, y)``, ``eta`` is the
@@ -249,24 +319,26 @@ class CurveFittingNetwork(object):
         """
         nabla_b = [np.zeros(b.shape) for b in self.biases]
         nabla_w = [np.zeros(w.shape) for w in self.weights]
-        curve_len = 0.0
+        #curve_len = 0.0
         #mini_batch_size = len(mini_batch)
-        for x, y in mini_batch:
-            delta_nabla_b, delta_nabla_w = self.backprop(x, y, scaling_value)
+        for x, y, ang, y_par in mini_batch:
+            delta_nabla_b, delta_nabla_w = self.backprop(x, y, ang, y_par, param_ranges)
             nabla_b = [nb+dnb for nb, dnb in zip(nabla_b, delta_nabla_b)]
             nabla_w = [nw+dnw for nw, dnw in zip(nabla_w, delta_nabla_w)]
-            out = self.feedforward(x)
+            #out = self.feedforward(x)
             #print(out)
-            curve_len+=curve_length(x[0], x[1], x[2], out[0], out[1], out[2])
+            #curve_len+=curve_length(x[0], x[1], x[2], out[0], out[1], out[2])
             #print(curve_len)
         #print('average ',  curve_len/mini_batch_size)
-        avg_curve_len = curve_len/len(mini_batch)
-        self.weights = [(0.5*(1-eta*(lmbda/n))+0.5*(6.0/avg_curve_len))*w-(eta/len(mini_batch))*nw
+        #avg_curve_len = curve_len/len(mini_batch)
+        self.weights = [(1-eta*(lmbda/n))*w-(eta/len(mini_batch))*nw
                         for w, nw in zip(self.weights, nabla_w)]
         self.biases = [b-(eta/len(mini_batch))*nb
                        for b, nb in zip(self.biases, nabla_b)]
 
-    def backprop(self, x, y, scaling_value):
+        
+
+    def backprop(self, x, y, angle, y_par, param_ranges):
         """Return a tuple ``(nabla_b, nabla_w)`` representing the
         gradient for the cost function C_x.  ``nabla_b`` and
         ``nabla_w`` are layer-by-layer lists of numpy arrays, similar
@@ -286,13 +358,64 @@ class CurveFittingNetwork(object):
         
         # This is where the deltas for the output node is being found
         ## -------------------------------------- ###
-        h = (x[3], x[0], x[1], x[2])
-        param_deltas = np.array([calculate_observable_delta(h, 0), calculate_observable_delta(h, 1), calculate_observable_delta(h, 2)])
+
+        dict_string = '{0}-{1}-{2}-{3}'.format(x[2], x[0], x[1], x[3])
+
+        #estimated_val = self.bhdvcs.TotalUUXS(angle, pars)
+        parameter_set = get_parameter_permutations(self.param_ranges[dict_string], [zs[-1][0], zs[-1][1], zs[-1][2]], 0, [])
+        #print('----')
+        estimated_set = []
+        for k in range(len(parameter_set)):
+            temp = parameter_set[k]
+            pars = [x[2], x[0], x[1], x[3], temp[0], temp[1], temp[0], temp[1], temp[2],  0.014863]
+            estimated_set.append(self.bhdvcs.TotalUUXS(angle, pars))
+            #print('Parameters: ', temp,'\n Estimated Val: ', estimated_set[-1], '\n Actual: ', y)
+
+        estimated_set = np.array(estimated_set)
+        estimated_set_del = np.abs(estimated_set - y)
+
+        min_index = np.argmin(estimated_set_del)
+        pars2 = [x[2], x[0], x[1], x[3], self.best_params[dict_string][0], self.best_params[dict_string][1], self.best_params[dict_string][0], 
+                                        self.best_params[dict_string][1], self.best_params[dict_string][2],  0.014863]
+        best_estimated = self.bhdvcs.TotalUUXS(angle, pars2)
+        del_best_est = np.abs(best_estimated - y)
+
+        #if del_best_est > estimated_set_del[min_index]:
+        #    tmp_pars = self.best_params[dict_string]
+        #    self.best_params[dict_string] = [tmp_pars[0]*0.8+0.2*parameter_set[min_index][0], tmp_pars[1]*0.8+0.2*parameter_set[min_index][1], tmp_pars[2]*0.8+0.2*parameter_set[min_index][2]]
+
         
-        estimated_val = calculate_observable(h, activations[-1][0], activations[-1][1], activations[-1][2])
+        tmp_pars = self.best_params[dict_string]
 
-        delta = (estimated_val-y)*param_deltas*scaling_value
+        if del_best_est < estimated_set_del[min_index]:
+            self.next_params[dict_string][0] = self.best_params[dict_string][0]
+            self.next_params[dict_string][1] = self.best_params[dict_string][1]
+            self.next_params[dict_string][2] = self.best_params[dict_string][2]
+        else:
+            self.next_params[dict_string][0] += parameter_set[min_index][0]
+            self.next_params[dict_string][1] += parameter_set[min_index][1]
+            self.next_params[dict_string][2] += parameter_set[min_index][2]
+        
+        self.next_params_count[dict_string] += 1
 
+        delta = (zs[-1] - np.reshape(tmp_pars, (len(zs[-1]),1)))
+
+        for i in range(len(self.param_ranges[dict_string])):
+            self.param_ranges[dict_string][i][0] = self.param_ranges[dict_string][i][0]*0.999+0.001*parameter_set[min_index][i]
+            self.param_ranges[dict_string][i][1] = self.param_ranges[dict_string][i][1]*0.999+0.001*parameter_set[min_index][i]
+
+        #random_element = np.abs(np.random.random((3,1)))
+        #chi2 = (estimated_val-y)/y
+        #delta = chi2*param_deltas2*random_element
+        
+        if zs[-1][0] < 0:
+             delta[0] = -5.0
+        if zs[-1][1] < 0:
+             delta[1] = -5.0
+        if zs[-1][2] < 0:
+             delta[2] = -5.0
+
+        #print(delta)
         nabla_b[-1] = delta
         nabla_w[-1] = np.dot(delta, activations[-2].transpose())
         #-----------------------------------------##
@@ -311,6 +434,17 @@ class CurveFittingNetwork(object):
             nabla_b[-l] = delta
             nabla_w[-l] = np.dot(delta, activations[-l-1].transpose())
         return (nabla_b, nabla_w)
+
+    def predict(self, x, angle):
+        out = self.feedforward(x)
+        pars = [x[2], x[0], x[1], x[3], out[0], out[1], out[0], out[1], out[2],  0.014863]
+        y_val = self.bhdvcs.TotalUUXS(angle, pars)
+        return out, y_val
+
+    def observable_equation(self, angle, pars):
+        y_val = self.bhdvcs.TotalUUXS(angle, pars)
+        return y_val
+
 
     def accuracy(self, data, convert=False):
         """Return the number of inputs in ``data`` for which the neural
@@ -337,11 +471,12 @@ class CurveFittingNetwork(object):
         """
 
 
-        results = [(x, self.feedforward(x), y) for (x, y) in data]
+        results = [(x, self.feedforward(x), y, a) for (x, y, a, yp) in data]
         mse_sum = 0.0
         count = 0
-        for (x, out, y_true) in results:
-            y_est = calculate_observable((x[3], x[0], x[1], x[2]), out[0], out[1], out[2])
+        for (x, out, y_true, angle) in results:
+            pars = [x[2], x[0], x[1], x[3], out[0], out[1], out[0], out[1], out[2],  0.014863]
+            y_est = self.bhdvcs.TotalUUXS([angle], pars)
             count+=1
             tmp = sum((y_est-y_true)*(y_est-y_true))
             mse_sum+= tmp
@@ -356,9 +491,11 @@ class CurveFittingNetwork(object):
         reversed) convention for the ``accuracy`` method, above.
         """
         cost = 0.0
-        for x, y in data:
+        for x, y, ang, y_par in data:
             a = self.feedforward(x)
-            cost += self.cost.fn(calculate_observable((x[3], x[0], x[1], x[2]), a[0][0], a[1][0], a[2][0]), y)/len(data)
+            pars = [x[2], x[0], x[1], x[3], a[0][0], a[1][0], a[0][0], a[1][0], a[2][0],  0.014863]
+            y_est = self.bhdvcs.TotalUUXS([ang], pars)
+            cost += self.cost.fn(y_est, y)/len(data)
         cost += 0.5*(lmbda/len(data))*sum(
             np.linalg.norm(w)**2 for w in self.weights)
         return cost
@@ -426,6 +563,22 @@ def ELU(val):
     else:
         return np.exp(val)-1.0
 
+def get_parameter_permutations(param_ranges, parameters, index, cur_list):
+    par_tmp_1 = np.random.uniform(low=param_ranges[index][0], high=parameters[index])#(parameters[index]+param_ranges[index][0])/2
+    par_tmp_2 = parameters[index]
+    par_tmp_3 = np.random.uniform(low=parameters[index], high=param_ranges[index][1])#(parameters[index]+param_ranges[index][1])/2
+    if index==(len(parameters)-1):
+        return [cur_list+[par_tmp_1], cur_list+[par_tmp_2], cur_list+[par_tmp_3]]
+
+    out = [get_parameter_permutations(param_ranges, parameters, index+1, cur_list+[par_tmp_1]),
+            get_parameter_permutations(param_ranges, parameters, index+1, cur_list+[par_tmp_3]),
+            get_parameter_permutations(param_ranges, parameters, index+1, cur_list+[par_tmp_2])]
+
+    ret = []
+    for i in range(len(out)):
+        for j in range(len(out[i])):
+            ret.append(out[i][j])
+    return ret
 #def output_activation(val):
 
 

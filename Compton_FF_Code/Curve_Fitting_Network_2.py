@@ -278,8 +278,7 @@ class CurveFittingNetwork2(object):
         # This is where the deltas for the output node is being found
         ## -------------------------------------- ###
         h = (x[3], x[0], x[1], x[2])
-        param_deltas = np.array([[1.0],[1.0],[1.0]])
-        #np.array([calculate_observable_delta(h, 0), calculate_observable_delta(h, 1), calculate_observable_delta(h, 2)])
+        param_deltas = np.array([[1.0],[1.0],[1.0]]) #np.array([calculate_observable_delta(h, 0), calculate_observable_delta(h, 1), calculate_observable_delta(h, 2)])
         
         estimated_val = calculate_observable(h, activations[-1][0], activations[-1][1], activations[-1][2])
 
